@@ -1,0 +1,98 @@
+#Creating an instance of Simulator Object to setup and use the network setup.
+set myNS [new Simulator]
+#Setting up files for tracing & Network Animation….
+set trfile [open out.tr w]
+set namfile [open out.nam w]
+# Tracing files using their commands
+# log all the events to trace file
+$myNS trace-all $trfile
+# log all the events to Animation file
+$myNS namtrace-all $namfile
+#Creating NODES
+set n0 [$myNS node]
+set n1 [$myNS node]
+set n2 [$myNS node]
+set n3 [$myNS node]
+#Label the nodes
+$n0 label "TCP Source"
+$n1 label "UDP Source"
+$n2 label "Router"
+$n3 label "Sink/Null"
+#Define different colors for data flow
+$myNS color 1 blue
+$myNS color 2 red
+#Creating LINKS between different nodes
+$myNS duplex-link $n0 $n2 2Mb 10ms DropTail
+$myNS duplex-link $n1 $n2 2Mb 10ms DropTail
+$myNS duplex-link $n2 $n3 1.0Mb 20ms DropTail
+# Set the queue limit after which the packets are going to be dropped during
+# congestion situation.
+$myNS queue-limit $n2 $n3 40
+#Node position for Animation…
+$myNS duplex-link-op $n0 $n2 orient right-down
+$myNS duplex-link-op $n1 $n2 orient right-up
+$myNS duplex-link-op $n2 $n3 orient right
+#Create and attach UDP agent over nodes… (Sender)
+set udp0 [new Agent/UDP]
+$myNS attach-agent $n1 $udp0
+#Create and attach NULL agent over nodes… (Receiver)
+set null [new Agent/Null]
+$myNS attach-agent $n3 $null
+#Logically associate the UDP sender and receiver
+15ECL68: Computer Networks Lab manual
+Prof. Nataraju A.B., Dept of ECE, AIT Page - 12
+$myNS connect $udp0 $null
+$udp0 set fid_ 0
+#Create and attach TCP agent over nodes… (Sender)
+set tcp0 [new Agent/TCP]
+$myNS attach-agent $n0 $tcp0
+#Create and attach TCPSink agent over nodes… (Receiver)
+set sink [new Agent/TCPSink]
+$myNS attach-agent $n3 $sink
+#Logically associate the TCP sender and receiver
+$myNS connect $tcp0 $sink
+$tcp set fid_ 1
+#create a CBR application… and attach with UDP transport
+set cbr0 [new Application/Traffic/CBR]
+$cbr attach-agent $udp0
+#create an FTP application… and attach with TCP transport
+set ftp0 [new Application/FTP]
+$ftp attach-agent $tcp0
+$myNS at 0.1 "$cbr start"
+$myNS at 1.0 "$ftp start"
+$myNS at 4.0 "$ftp stop"
+$myNS at 4.5 "$cbr stop"
+$myNS at 5.0 "finish"
+#Closing trace file and starting NAM
+proc finish { } {
+global myNS trfile namfile
+$myNS flush-trace
+close $trfile
+close $namfile
+# exec nam out.nam &
+# exec awk -f n1.awk out.tr &
+exit 0
+}
+# RUN the simulation....
+$myNS run
+AWK File // Post processing the logs to obtain statistics…
+BEGIN{
+cbrPkt=0;
+tcpPkt=0;
+}
+{
+# identify the dropped CBR packets
+if(($1 == "d")&&($5 == "cbr")) {
+cbrPkt = cbrPkt + 1;
+}
+# identify the dropped TCP packets
+if(($1 == "d")&&($5 == "tcp")) {
+tcpPkt = tcpPkt + 1;
+15ECL68: Computer Networks Lab manual
+Prof. Nataraju A.B., Dept of ECE, AIT Page - 13
+}
+}
+END {
+printf "No. of CBR Packets Dropped %d\n", cbrPkt;
+printf "No. of TCP Packets Dropped %d\n", tcpPkt;
+}
